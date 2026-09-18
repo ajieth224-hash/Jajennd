@@ -85,7 +85,10 @@ function startBot(token, index) {
     client.on('ready', async () => {
         console.log(`[Token ${index + 1}] Sesi divalidasi, mencoba masuk Voice...`);
         try {
-            await streamer.joinVoice(guildId, channelId);
+            const joinTimeout = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('joinVoice() timed out after 45s - kemungkinan macet di handshake DAVE')), 45000);
+            });
+            await Promise.race([streamer.joinVoice(guildId, channelId), joinTimeout]);
             console.log(`[Token ${index + 1}] Berhasil masuk Voice Channel.`);
         } catch (e) {
             console.error(`[Token ${index + 1}] Gagal masuk Voice: ${e.message}`);
