@@ -228,7 +228,9 @@ function startBot(token, index) {
                             bitrateVideoMax: 1500,
                             videoCodec: Utils.normalizeVideoCodec('H264'),
                             h26xPreset: 'ultrafast',
-                            customFfmpegFlags: ['-threads', '2'], // best-effort: batasi thread biar RAM hemat
+                            includeAudio: false, // audio senyap tidak berguna & bikin warning "Frame takes too long to send"
+                            // -threads 1 hemat CPU; -g = keyframe tiap ~2 detik biar penonton yang baru gabung langsung lihat gambar
+                            customFfmpegFlags: ['-threads', '1', '-g', String(imageFps * 2)],
                         }
                         : {
                             height: videoHeight,
@@ -281,6 +283,42 @@ function startBot(token, index) {
         }
     }
 
+    // --- Pastikan akun TIDAK self-mute / self-deaf ---
+    // Op 4 = Voice State Update (perintah gateway Discord). Channel yang sama, jadi
+    // cuma mengubah status mute/deaf, tidak pindah/rejoin channel.
+    let joinedVoice = false;
+    let lastVoiceFix = 0;
+
+    function sendUnmuteUndeaf() {
+        const d = { guild_id: guildId, channel_id: channelId, self_mute: false, self_deaf: false };
+        try {
+            if (client.ws && typeof client.ws.broadcast === 'function') {
+                client.ws.broadcast({ op: 4, d });
+            } else if (typeof streamer.sendOpcode === 'function') {
+                streamer.sendOpcode(4, d);
+            } else {
+                console.error(`[Token ${index + 1}] Tidak bisa set status mute/deaf: tidak ada cara kirim voice state.`);
+            }
+        } catch (e) {
+            console.error(`[Token ${index + 1}] Gagal set status mute/deaf: ${(e && e.message) || e}`);
+        }
+    }
+
+    // Kalau akun ke-mute/deaf sendiri (mis. dari HP/PC lain), matikan lagi.
+    // Mute/deaf dari server (admin) tidak bisa diubah dari sini, jadi tidak dicek.
+    client.on('voiceStateUpdate', (_old, next) => {
+        try {
+            if (!joinedVoice || !client.user || !next || next.id !== client.user.id) return;
+            if (String(next.channelId) !== String(channelId)) return; // jangan paksa join ulang kalau sudah keluar
+            if (!next.selfMute && !next.selfDeaf) return;
+            const now = Date.now();
+            if (now - lastVoiceFix < 5000) return; // jangan spam
+            lastVoiceFix = now;
+            console.log(`[Token ${index + 1}] Terdeteksi self-mute/deaf, dimatikan lagi.`);
+            sendUnmuteUndeaf();
+        } catch (_) { /* abaikan */ }
+    });
+
     client.on('ready', async () => {
         console.log(`[Token ${index + 1}] Sesi divalidasi, mencoba masuk Voice...`);
         try {
@@ -292,6 +330,8 @@ function startBot(token, index) {
                 joinTimeout,
             ]);
             console.log(`[Token ${index + 1}] Berhasil masuk Voice Channel.`);
+            joinedVoice = true;
+            sendUnmuteUndeaf(); // pastikan tidak mute/deaf sejak awal
         } catch (e) {
             console.error(`[Token ${index + 1}] Gagal masuk Voice: ${e.message}`);
             return;
