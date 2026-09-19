@@ -102,8 +102,8 @@ if (!guildId || !channelId) {
 // screen share - bot akan tetap join voice & auto-reply AFK seperti biasa.
 const videoSource = process.env.VIDEO_SOURCE;
 const videoLoop = (process.env.VIDEO_LOOP || 'true').toLowerCase() === 'true';
-const videoHeight = parseInt(process.env.VIDEO_HEIGHT || '1080', 10);
-const videoFps = parseInt(process.env.VIDEO_FPS || '30', 10);
+const videoHeight = parseInt(process.env.VIDEO_HEIGHT || '360', 10);
+const videoFps = parseInt(process.env.VIDEO_FPS || '15', 10);
 
 const AFK_KEYWORDS = ['hey wake up', 'confirm by saying `yes`', 'are you still here'];
 
