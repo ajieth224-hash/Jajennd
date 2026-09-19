@@ -17,13 +17,38 @@ const execFileAsync = promisify(execFile);
 const YOUTUBE_PATTERN = /(youtube\.com|youtu\.be)/i;
 
 // Opsional: kalau YouTube nolak dengan "Sign in to confirm you're not a bot",
-// isi YOUTUBE_COOKIES di environment variable dengan isi file cookies.txt
-// (format Netscape) dari akun YouTube yang sudah login - bisa didapat pakai
-// ekstensi browser semacam "Get cookies.txt LOCALLY".
+// isi YOUTUBE_COOKIES di environment variable dengan cookie dari akun YouTube
+// yang sudah login. Boleh format Netscape ATAU JSON array (hasil export
+// ekstensi semacam Cookie-Editor) - otomatis dikonversi kalau perlu, soalnya
+// yt-dlp cuma mau baca format Netscape.
+function toNetscapeCookieFile(raw) {
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith('[')) return raw; // sudah bukan JSON, anggap sudah format Netscape
+
+    let cookies;
+    try {
+        cookies = JSON.parse(trimmed);
+    } catch (e) {
+        return raw; // bukan JSON valid juga - biarkan apa adanya, biar yt-dlp yang komplain
+    }
+
+    const lines = ['# Netscape HTTP Cookie File'];
+    for (const c of cookies) {
+        if (!c || !c.name || !c.domain) continue;
+        const domain = c.domain;
+        const includeSubdomains = domain.startsWith('.') ? 'TRUE' : 'FALSE';
+        const path = c.path || '/';
+        const secure = c.secure ? 'TRUE' : 'FALSE';
+        const expires = c.expirationDate ? Math.floor(c.expirationDate) : 0;
+        lines.push([domain, includeSubdomains, path, secure, expires, c.name, c.value].join('\t'));
+    }
+    return lines.join('\n') + '\n';
+}
+
 let youtubeCookiesPath = null;
 if (process.env.YOUTUBE_COOKIES) {
     youtubeCookiesPath = '/tmp/youtube-cookies.txt';
-    fs.writeFileSync(youtubeCookiesPath, process.env.YOUTUBE_COOKIES);
+    fs.writeFileSync(youtubeCookiesPath, toNetscapeCookieFile(process.env.YOUTUBE_COOKIES));
 }
 
 async function resolveVideoSource(source) {
