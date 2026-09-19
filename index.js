@@ -1,3 +1,6 @@
+import WebSocket from 'ws';
+globalThis.WebSocket = WebSocket;
+
 import { Client } from 'discord.js-selfbot-v13';
 import { Streamer, prepareStream, playStream, Utils } from '@dank074/discord-video-stream';
 import express from 'express';
