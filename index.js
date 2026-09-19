@@ -5,6 +5,28 @@ import { Client } from 'discord.js-selfbot-v13';
 import { Streamer, prepareStream, playStream, Utils } from '@dank074/discord-video-stream';
 import express from 'express';
 import fs from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
+
+// youtu.be/youtube.com links are web pages, not direct video files - ffmpeg
+// can't read them as-is. yt-dlp resolves the actual direct media URL first.
+// Re-resolved fresh each time startScreenShare() runs (including on loop),
+// since the resolved URL expires after a while.
+const YOUTUBE_PATTERN = /(youtube\.com|youtu\.be)/i;
+
+async function resolveVideoSource(source) {
+    if (!YOUTUBE_PATTERN.test(source)) return source;
+    try {
+        const { stdout } = await execFileAsync('yt-dlp', ['-f', 'best[ext=mp4]/best', '-g', source]);
+        const directUrl = stdout.trim().split('\n')[0];
+        if (!directUrl) throw new Error('yt-dlp tidak mengembalikan URL apa pun');
+        return directUrl;
+    } catch (e) {
+        throw new Error(`Gagal resolve link YouTube lewat yt-dlp: ${e.message}`);
+    }
+}
 
 // --- Dummy Web Server (buat Render, biar ada yang "dengerin" di sebuah port) ---
 const app = express();
@@ -59,7 +81,8 @@ function startBot(token, index) {
         streaming = true;
         try {
             console.log(`[Token ${index + 1}] Memulai screen share: ${videoSource}`);
-            const { command, output } = prepareStream(videoSource, {
+            const resolvedSource = await resolveVideoSource(videoSource);
+            const { command, output } = prepareStream(resolvedSource, {
                 height: videoHeight,
                 frameRate: videoFps,
                 bitrateVideo: 5000,
