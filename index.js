@@ -16,10 +16,22 @@ const execFileAsync = promisify(execFile);
 // since the resolved URL expires after a while.
 const YOUTUBE_PATTERN = /(youtube\.com|youtu\.be)/i;
 
+// Opsional: kalau YouTube nolak dengan "Sign in to confirm you're not a bot",
+// isi YOUTUBE_COOKIES di environment variable dengan isi file cookies.txt
+// (format Netscape) dari akun YouTube yang sudah login - bisa didapat pakai
+// ekstensi browser semacam "Get cookies.txt LOCALLY".
+let youtubeCookiesPath = null;
+if (process.env.YOUTUBE_COOKIES) {
+    youtubeCookiesPath = '/tmp/youtube-cookies.txt';
+    fs.writeFileSync(youtubeCookiesPath, process.env.YOUTUBE_COOKIES);
+}
+
 async function resolveVideoSource(source) {
     if (!YOUTUBE_PATTERN.test(source)) return source;
     try {
-        const { stdout } = await execFileAsync('yt-dlp', ['-f', 'best[ext=mp4]/best', '-g', source]);
+        const args = ['-f', 'best[ext=mp4]/best', '-g', source];
+        if (youtubeCookiesPath) args.push('--cookies', youtubeCookiesPath);
+        const { stdout } = await execFileAsync('yt-dlp', args);
         const directUrl = stdout.trim().split('\n')[0];
         if (!directUrl) throw new Error('yt-dlp tidak mengembalikan URL apa pun');
         return directUrl;
